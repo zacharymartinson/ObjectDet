@@ -22,5 +22,16 @@ git clone https://github.com/PhlawedZM/ObjectDet.git
 cd ObjectDet
 ```
 
-Second, set up gradle imports by syncing.
+
+### Turning the model into tflite
+Second, we have to turn these models in tflite format. Run this line in main.py
+
+
+```bash
+export_saved_model('your_saved_model')
+```
+
+
+### Sync Gradle
+Third, set up gradle imports by syncing.
 You should be running.
