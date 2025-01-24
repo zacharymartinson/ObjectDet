@@ -39,7 +39,9 @@ android {
 }
 
 dependencies {
-
+    runtimeOnly("androidx.activity:activity-ktx:1.9.3")
+    runtimeOnly("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    runtimeOnly("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

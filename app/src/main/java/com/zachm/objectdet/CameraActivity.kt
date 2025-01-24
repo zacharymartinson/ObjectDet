@@ -11,6 +11,7 @@ import android.util.Log
 import android.util.Size
 import android.view.Surface.ROTATION_0
 import android.view.View
+import androidx.activity.viewModels
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
@@ -40,15 +41,35 @@ import java.io.File
  */
 class CameraActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraBinding
-
+    private val viewModel: CameraViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         binding = ActivityCameraBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        //launchCamera()
+        binding.bbox.trackFPS = true
+
+        viewModel.items.observe(this) {
+            binding.bbox.update(viewModel.boxes.value ?: listOf(),viewModel.scores.value ?: listOf(),viewModel.items.value ?: listOf())
+        }
+
+        viewModel.mobileNetModel.observe(this) {
+            Log.d("CameraX", "MobileNet: $it")
+        }
+
+        if(intent.extras?.containsKey("Model") == true) {
+            when(intent.getStringExtra("Model")) {
+                "MobileNet" -> {
+                    viewModel.mobileNet.value = true
+                    viewModel.mobileNetModel.value = MobileNet(this, MobileNet.mobileNetV2)
+                }
+                "EfficientDet" -> viewModel.efficientDet.value = true
+                "YOLO" -> viewModel.yolo.value = true
+            }
+        }
+
+        //launchCamera() //For Image saving if you are interested.
         launchVideoCamera()
     }
 
@@ -84,17 +105,16 @@ class CameraActivity : AppCompatActivity() {
     private fun launchVideoCamera() {
         val processCamera = ProcessCameraProvider.getInstance(this)
 
+
         processCamera.addListener({
             val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
             val imageFuture = processCamera.get()
             val preview = Preview.Builder().build()
 
-            val resolutionSelector = ResolutionSelector.Builder()
-                .setResolutionStrategy(ResolutionStrategy(Size(320,320), FALLBACK_RULE_CLOSEST_HIGHER))
-                .build()
+            viewModel.setResolutionSelector()
 
             val imageAnalysis = ImageAnalysis.Builder()
-                .setResolutionSelector(resolutionSelector)
+                .setResolutionSelector(viewModel.resolutionSelector.value!!)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
@@ -102,36 +122,12 @@ class CameraActivity : AppCompatActivity() {
             binding.button.setImageDrawable(ResourcesCompat.getDrawable(resources,R.drawable.baseline_done_white_48,null))
             binding.button.setOnClickListener{startActivity(Intent(this,MainActivity::class.java))}
 
-            val model = MobileNet(this, MobileNet.mobileNetV2)
-
-            //val model = EfficientDet(this)
-            //val model = GoogleObjectDetection()
-
             imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(this)) {
-                val image = it.toBitmap() //TODO This can be improved, it may be better to instantly create a ScaleBitmap here.
                 val rotation = preview.resolutionInfo!!.rotationDegrees
 
-                //We do not want to do this on the main thread. It will lag and be unresponsive on top of sharing resources with everything else.
-                CoroutineScope(Dispatchers.IO).launch {
-
-                    try {
-                        //Run the model and put boxes into memory.
-                        model.detect(image,binding.surface,rotation)
-                        image.recycle()
-                        val boxes = model.boxes
-                        val scores = model.scores
-                        val items = model.item
-
-                        withContext(Dispatchers.Main) {
-                            binding.bbox.update(boxes, scores, items) //Send to bbox view on the Main thread.
-                            binding.bbox.trackFPS = true
-                            it.close()
-                        }
-
-                    }
-                    catch(e: Exception) {
-                        e.message?.let { msg -> Log.e("CameraX", msg) }
-                        it.close()
+                when {
+                    viewModel.mobileNet.value!! -> {
+                        viewModel.runMobileNetV2Model(it,binding.surface,rotation)
                     }
                 }
             }
