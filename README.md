@@ -12,7 +12,7 @@ Make sure you have the following installed:
 
 - [Python](https://www.python.org/)
 - [Android Studio](https://developer.android.com/studio)
-- [Tensorflow 2 Model](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md)
+- [Tensorflow 2 Model Zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md)
 
 ### Cloning the Repository
 First, clone this repository to your local machine using Git:
