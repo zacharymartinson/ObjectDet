@@ -1,13 +1,13 @@
 package com.zachm.objectdet.tracking
 
 import android.graphics.Rect
+import android.util.Log
 import com.zachm.objectdet.util.BoundingBox
 
 class DetectionBuffer() {
-    private val trackedDetections: MutableMap<String,Detection> = mutableMapOf()
-    private val buffer: MutableMap<Int, List<Detection>> = mutableMapOf()
-    private val predictedDetections: MutableMap<String,Detection> = mutableMapOf()
-    private var frameCount: Int = 0
+    private val trackedDetections: MutableMap<Int,Detection> = mutableMapOf()
+    private val predictedDetections: MutableMap<Int,Detection> = mutableMapOf()
+    private val detectionBuffer: MutableMap<Int,Int> = mutableMapOf()
     private var itemCount: Int = 1
     val threshold: Float = 0.65f
     var bboxes: BoundingBox? = null
@@ -17,70 +17,59 @@ class DetectionBuffer() {
         val boxes = mutableListOf<Rect>()
         val scores = mutableListOf<Float>()
         val items = mutableListOf<String>()
-        val indexes: MutableSet<Int> = mutableSetOf()
-        val remove: MutableSet<String> = mutableSetOf()
+        val remove = mutableSetOf<Int>()
 
-        buffer[frameCount] = detections
+        detections.forEach { current ->
+            var matched = false
 
-        predictedDetections.clear()
-
-        if (!buffer[frameCount - 1].isNullOrEmpty()) {
-            val oldDetections = buffer[frameCount - 1]!!
-
-            detections.forEach { currentDetection ->
-                oldDetections.forEach { oldDetection ->
-                    if(calculateIOU(currentDetection.bbox,oldDetection.bbox) > threshold) {
-                        currentDetection.velocity = calculateVelocity(currentDetection.velocity,oldDetection.velocity)
-                        currentDetection.item = "${currentDetection.item} #$itemCount"
-                        itemCount++
-                        trackedDetections[currentDetection.item] = currentDetection
-                    }
-                }
-            }
-        }
-        else {
-            detections.forEach {
-                it.item = "${it.item} #$itemCount"
-                itemCount++
-                trackedDetections[it.item] = it
-            }
-        }
-
-        trackedDetections.forEach { tracked ->
-            detections.forEach { current ->
-                if(calculateIOU(tracked.value.bbox,current.bbox) > threshold) {
-                    current.velocity = calculateVelocity(current.velocity,tracked.value.velocity)
-                    current.item = tracked.value.item
-
-                    val predict = calculateKalmanFilter(current)
-                    predictedDetections[predict.item] = predict
-                }
-            }
-        }
-
-        predictedDetections.forEach { predict ->
             trackedDetections.forEach { tracked ->
-                if(calculateIOU(predict.value.bbox,tracked.value.bbox) > threshold && predict.value.item == tracked.value.item) {
-                    detections.forEachIndexed { index, current ->
-                        if(calculateIOU(current.bbox,predict.value.bbox) > threshold && index !in indexes) {
-                            boxes.add(current.bbox)
-                            scores.add(current.score)
-                            items.add(tracked.value.item)
-                            indexes.add(index)
-                        }
+                if(calculateIOU(current.bbox, tracked.value.bbox) > threshold) {
+
+                    current.id = tracked.value.id
+                    current.velocity = calculateVelocity(current.bbox, tracked.value.bbox)
+
+                    matched = true
+                }
+            }
+
+            if(!matched) {
+                predictedDetections.forEach { predicted->
+                    if(calculateIOU(current.bbox, predicted.value.bbox) > threshold) {
+                        current.velocity = calculateVelocity(current.bbox, trackedDetections[current.id]?.bbox ?: current.bbox)
+                        matched = true
                     }
                 }
             }
-        }
 
+            if(matched) {
+                boxes.add(current.bbox)
+                scores.add(current.score)
+                items.add(current.item + " #" +current.id.toString())
+
+                trackedDetections[current.id] = current
+                predictedDetections[current.id] = calculateKalmanFilter(current)
+                detectionBuffer[current.id] = 0
+            }
+
+            if(!matched && current.id == 0) {
+                current.id = itemCount
+                itemCount++
+                trackedDetections[current.id] = current
+                detectionBuffer[current.id] = 0
+            }
+
+            if(!matched && current.id != 0 && detectionBuffer.contains(current.id)) {
+                detectionBuffer[current.id] = detectionBuffer[current.id]!! + 1
+
+                if(detectionBuffer[current.id]!! > 10) {
+                    remove.add(current.id)
+                }
+            }
+        }
 
         bboxes = BoundingBox(boxes,scores,items)
-        buffer.remove(frameCount-3)
-        remove.forEach { trackedDetections.remove(it) }
-
         if(itemCount >= 100) { itemCount = 1 }
-
-        frameCount++
+        remove.forEach { trackedDetections.remove(it) }
     }
 
     private fun calculateIOU(current: Rect, old: Rect): Float {
@@ -109,9 +98,9 @@ class DetectionBuffer() {
         return intersectionArea.toFloat() / unionArea.toFloat()
     }
 
-    private fun calculateVelocity(current: Pair<Int,Int>, old: Pair<Int,Int>): Pair<Int, Int> {
-        var x = current.first - old.first
-        var y = current.second - old.second
+    private fun calculateVelocity(current: Rect, old: Rect): Pair<Int, Int> {
+        var x = current.centerX() - old.centerX()
+        var y = current.centerY() - old.centerY()
         return Pair(x,y)
     }
 
@@ -126,4 +115,4 @@ class DetectionBuffer() {
     }
 }
 
-data class Detection(val bbox: Rect, val score: Float, var item: String, var velocity: Pair<Int, Int> = Pair(0,0))
+data class Detection(val bbox: Rect, val score: Float, var item: String, var velocity: Pair<Int, Int> = Pair(0,0), var id: Int = 0)
