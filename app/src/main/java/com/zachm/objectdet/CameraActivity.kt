@@ -55,6 +55,7 @@ class CameraActivity : AppCompatActivity() {
         binding.bbox.trackFPS = true
 
         viewModel.buffer.value = DetectionBuffer()
+        viewModel.buffer.value?.clear()
 
         viewModel.detections.observe(this) {
             it?.let {

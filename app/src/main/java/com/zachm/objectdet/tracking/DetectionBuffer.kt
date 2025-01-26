@@ -7,8 +7,8 @@ import com.zachm.objectdet.util.BoundingBox
 class DetectionBuffer() {
     private val trackedDetections: MutableMap<Int,Detection> = mutableMapOf()
     private val predictedDetections: MutableMap<Int,Detection> = mutableMapOf()
-    private val detectionBuffer: MutableMap<Int,Int> = mutableMapOf()
-    private var itemCount: Int = 1
+    private val detectionBuffer: MutableMap<Int,Long> = mutableMapOf()
+    private val ids: MutableSet<Int> = mutableSetOf()
     val threshold: Float = 0.65f
     var bboxes: BoundingBox? = null
 
@@ -17,27 +17,28 @@ class DetectionBuffer() {
         val boxes = mutableListOf<Rect>()
         val scores = mutableListOf<Float>()
         val items = mutableListOf<String>()
-        val remove = mutableSetOf<Int>()
+        val currentTime = System.currentTimeMillis()
 
         detections.forEach { current ->
             var matched = false
 
+            predictedDetections.forEach { predicted->
+                if(calculateIOU(current.bbox, predicted.value.bbox) > threshold && current.item == predicted.value.item) {
+                    matched = true
+                }
+            }
+
             trackedDetections.forEach { tracked ->
-                if(calculateIOU(current.bbox, tracked.value.bbox) > threshold) {
+                if(calculateIOU(current.bbox, tracked.value.bbox) > threshold && current.item == tracked.value.item) {
+
+                    if(tracked.value.id == 0) {
+                        tracked.value.id = generateID()
+                    }
 
                     current.id = tracked.value.id
                     current.velocity = calculateVelocity(current.bbox, tracked.value.bbox)
 
                     matched = true
-                }
-            }
-
-            if(!matched) {
-                predictedDetections.forEach { predicted->
-                    if(calculateIOU(current.bbox, predicted.value.bbox) > threshold) {
-                        current.velocity = calculateVelocity(current.bbox, trackedDetections[current.id]?.bbox ?: current.bbox)
-                        matched = true
-                    }
                 }
             }
 
@@ -48,28 +49,50 @@ class DetectionBuffer() {
 
                 trackedDetections[current.id] = current
                 predictedDetections[current.id] = calculateKalmanFilter(current)
-                detectionBuffer[current.id] = 0
+                detectionBuffer[current.id] = currentTime
             }
 
             if(!matched && current.id == 0) {
-                current.id = itemCount
-                itemCount++
+                current.id = generateID()
                 trackedDetections[current.id] = current
-                detectionBuffer[current.id] = 0
+                detectionBuffer[current.id] = currentTime
             }
+        }
 
-            if(!matched && current.id != 0 && detectionBuffer.contains(current.id)) {
-                detectionBuffer[current.id] = detectionBuffer[current.id]!! + 1
 
-                if(detectionBuffer[current.id]!! > 10) {
-                    remove.add(current.id)
-                }
+        //We use an interator here because of concurrent exceptions
+        //Bascially iterating while modifying the map is bad and causes lag and stuttering.
+        val iterator = detectionBuffer.entries.iterator()
+
+        while(iterator.hasNext()) {
+            val entry = iterator.next()
+            if(currentTime - entry.value > 1000L) {
+                iterator.remove()
+                predictedDetections.remove(entry.key)
+                trackedDetections.remove(entry.key)
+                ids.remove(entry.key)
             }
         }
 
         bboxes = BoundingBox(boxes,scores,items)
-        if(itemCount >= 100) { itemCount = 1 }
-        remove.forEach { trackedDetections.remove(it) }
+    }
+
+    fun clear() {
+        trackedDetections.clear()
+        predictedDetections.clear()
+        detectionBuffer.clear()
+        ids.clear()
+    }
+
+    private fun generateID(): Int {
+        //Could use Random.nextInt() here to save time potentially?
+        for(id in 1 until 99) {
+            if(!ids.contains(id)) {
+                ids.add(id)
+                return id
+            }
+        }
+        return 0
     }
 
     private fun calculateIOU(current: Rect, old: Rect): Float {
