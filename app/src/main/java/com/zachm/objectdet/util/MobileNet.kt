@@ -8,12 +8,12 @@ import android.graphics.Matrix
 import android.graphics.Rect
 import android.util.Log
 import androidx.camera.view.PreviewView
+import com.zachm.objectdet.tracking.Detection
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.model.Model.Device
-import org.tensorflow.lite.task.vision.detector.Detection
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import org.tensorflow.lite.task.vision.detector.ObjectDetector.ObjectDetectorOptions
 import java.io.FileInputStream
@@ -45,6 +45,7 @@ class MobileNet(private val ctx: Context, private val modelType: String) {
     var boxes: MutableList<Rect> = mutableListOf()
     var scores: MutableList<Float> = mutableListOf()
     var item: MutableList<String> = mutableListOf()
+    var detections: MutableList<Detection> = mutableListOf()
 
     init {
         model = Interpreter(loadModelFile(modelType))
@@ -128,6 +129,7 @@ class MobileNet(private val ctx: Context, private val modelType: String) {
         boxes.clear()
         scores.clear()
         item.clear()
+        detections.clear()
 
         //To get the resolution of the actual surface (the view the user is seeing)
         val width = preview.measuredWidth
@@ -162,6 +164,9 @@ class MobileNet(private val ctx: Context, private val modelType: String) {
                 boxes.add(Rect(left.toInt(), top.toInt(), right.toInt(), bottom.toInt()))
                 scores.add(detectionScores[0][i])
                 item.add(items[detectionClasses[0][i].toInt()])
+
+                detections.add(Detection(Rect(left.toInt(), top.toInt(), right.toInt(), bottom.toInt()), detectionScores[0][i], items[detectionClasses[0][i].toInt()]))
+
             }
         }
     }
@@ -199,19 +204,8 @@ class MobileNet(private val ctx: Context, private val modelType: String) {
         return tensor
     }
 
-    /**
-     * Detection for TensorFlow 1 Models
-     */
-    fun detectWithObjectDetector(image: Bitmap): List<Detection> {
-        val detector = setupObjectDetector()
-        val tensorImage = TensorImage.fromBitmap(image)
-        return detector.detect(tensorImage)
-    }
-
     companion object {
         const val mobileNetV2 = "MobileNetV2.tflite"
         const val mobileNetV1 = "MobileNetV1.tflite"
     }
-
-
 }

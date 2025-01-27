@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import com.zachm.objectdet.tracking.Detection
 
 /**
  * A view created for implementation of Bounding Boxes with the goal of Object Detection.
@@ -45,10 +46,10 @@ class BoundingBoxView(ctx: Context, attributes: AttributeSet?): View(ctx, attrib
         style = Paint.Style.FILL
     }
 
-    fun update(boxes: List<Rect>, scores: List<Float>, items:List<String>) {
-        this.boxes = boxes
-        this.scores = scores
-        this.items = items
+    fun update(detections: BoundingBox) {
+        this.boxes = detections.bbox
+        this.scores = detections.scores
+        this.items = detections.items
         invalidate()
     }
 
@@ -87,3 +88,5 @@ class BoundingBoxView(ctx: Context, attributes: AttributeSet?): View(ctx, attrib
         }
     }
 }
+
+data class BoundingBox(val bbox: List<Rect>, val scores: List<Float>, val items: List<String>)

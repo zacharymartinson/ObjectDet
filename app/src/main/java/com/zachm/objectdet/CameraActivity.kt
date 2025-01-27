@@ -24,7 +24,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.toRectF
+import com.google.ar.core.ArCoreApk
+import com.google.ar.core.Config
+import com.google.ar.core.Session
 import com.zachm.objectdet.databinding.ActivityCameraBinding
+import com.zachm.objectdet.tracking.DetectionBuffer
 import com.zachm.objectdet.util.EfficientDet
 import com.zachm.objectdet.util.GoogleObjectDetection
 import com.zachm.objectdet.util.MobileNet
@@ -50,12 +54,13 @@ class CameraActivity : AppCompatActivity() {
 
         binding.bbox.trackFPS = true
 
-        viewModel.items.observe(this) {
-            binding.bbox.update(viewModel.boxes.value ?: listOf(),viewModel.scores.value ?: listOf(),viewModel.items.value ?: listOf())
-        }
+        viewModel.buffer.value = DetectionBuffer()
+        viewModel.buffer.value?.clear()
 
-        viewModel.mobileNetModel.observe(this) {
-            Log.d("CameraX", "MobileNet: $it")
+        viewModel.detections.observe(this) {
+            it?.let {
+                binding.bbox.update(it)
+            }
         }
 
         if(intent.extras?.containsKey("Model") == true) {
@@ -183,5 +188,25 @@ class CameraActivity : AppCompatActivity() {
             folder.mkdirs()
         }
         return File(folder, "image.jpg")
+    }
+
+    private fun isAvailable(): Boolean {
+        return when(ArCoreApk.getInstance().checkAvailability(this)) {
+            ArCoreApk.Availability.SUPPORTED_INSTALLED -> true
+            ArCoreApk.Availability.SUPPORTED_APK_TOO_OLD -> true
+            ArCoreApk.Availability.SUPPORTED_NOT_INSTALLED -> true
+            else -> false
+        }
+    }
+
+    private fun isInstalled(): Boolean {
+        return when(ArCoreApk.getInstance().requestInstall(this,true)) {
+            ArCoreApk.InstallStatus.INSTALLED -> true
+            else -> false
+        }
+    }
+
+    private fun installArCore() {
+        ArCoreApk.getInstance().requestInstall(this,true)
     }
 }

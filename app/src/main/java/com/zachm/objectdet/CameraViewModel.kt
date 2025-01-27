@@ -13,6 +13,9 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zachm.objectdet.databinding.ActivityCameraBinding
+import com.zachm.objectdet.tracking.Detection
+import com.zachm.objectdet.tracking.DetectionBuffer
+import com.zachm.objectdet.util.BoundingBox
 import com.zachm.objectdet.util.MobileNet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +31,8 @@ class CameraViewModel : ViewModel() {
     val boxes: MutableLiveData<List<Rect>> by lazy { MutableLiveData<List<Rect>>() }
     val scores: MutableLiveData<List<Float>> by lazy { MutableLiveData<List<Float>>() }
     val items: MutableLiveData<List<String>> by lazy { MutableLiveData<List<String>>() }
+    val detections: MutableLiveData<BoundingBox?> by lazy { MutableLiveData<BoundingBox?>(null) }
+    val buffer: MutableLiveData<DetectionBuffer> by lazy { MutableLiveData<DetectionBuffer>() }
 
 
     fun setResolutionSelector() {
@@ -55,6 +60,9 @@ class CameraViewModel : ViewModel() {
                     boxes.postValue(mobileNetModel.value?.boxes ?: listOf())
                     scores.postValue(mobileNetModel.value?.scores ?: listOf())
                     items.postValue(mobileNetModel.value?.item ?: listOf())
+
+                    buffer.value!!.addDetections(mobileNetModel.value!!.detections)
+                    detections.value = buffer.value!!.bboxes
                 }
 
                 proxy.close()
@@ -66,6 +74,10 @@ class CameraViewModel : ViewModel() {
             }
 
         }
+    }
+
+    fun updateDetections(newDetections: BoundingBox) {
+        detections.value = newDetections
     }
 
     private fun updateBoxes() {
