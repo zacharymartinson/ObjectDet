@@ -3,13 +3,16 @@ package com.zachm.objectdet.tracking
 import android.graphics.Rect
 import android.util.Log
 import com.zachm.objectdet.util.BoundingBox
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class DetectionBuffer() {
     private val trackedDetections: MutableMap<Int,Detection> = mutableMapOf()
     private val predictedDetections: MutableMap<Int,Detection> = mutableMapOf()
     private val detectionBuffer: MutableMap<Int,Long> = mutableMapOf()
     private val ids: MutableSet<Int> = mutableSetOf()
-    val threshold: Float = 0.65f
+    val threshold: Float = 0.85f
     var bboxes: BoundingBox? = null
 
     fun addDetections(detections: List<Detection>) {
@@ -21,22 +24,34 @@ class DetectionBuffer() {
 
         detections.forEach { current ->
             var matched = false
+            var predict = false
 
             predictedDetections.forEach { predicted->
-                if(calculateIOU(current.bbox, predicted.value.bbox) > threshold && current.item == predicted.value.item) {
+                if(calculateThreshold(calculateIOU(current.bbox, predicted.value.bbox), predicted.value.confidence) > (threshold - calculateScaledVelocity(predicted.value.velocity, predicted.value.bbox)) && current.item == predicted.value.item) {
                     matched = true
+                    predict = true
+
+                    current.confidenceSet = predicted.value.confidenceSet
+                    current.confidenceSet.add(calculateIOU(current.bbox, predicted.value.bbox).toDouble())
+                    current.id = predicted.value.id
                 }
             }
 
             trackedDetections.forEach { tracked ->
-                if(calculateIOU(current.bbox, tracked.value.bbox) > threshold && current.item == tracked.value.item) {
+                if(calculateThreshold(calculateIOU(current.bbox, tracked.value.bbox), tracked.value.confidence) > (threshold - calculateScaledVelocity(tracked.value.velocity, tracked.value.bbox)) && current.item == tracked.value.item) {
 
+                    //Edge case for when it is the first detection from IoU
                     if(tracked.value.id == 0) {
                         tracked.value.id = generateID()
                     }
 
                     current.id = tracked.value.id
                     current.velocity = calculateVelocity(current.bbox, tracked.value.bbox)
+
+                    if(!predict) {
+                        current.confidenceSet = tracked.value.confidenceSet
+                        current.confidenceSet.add(calculateIOU(current.bbox, tracked.value.bbox).toDouble())
+                    }
 
                     matched = true
                 }
@@ -45,7 +60,9 @@ class DetectionBuffer() {
             if(matched) {
                 boxes.add(current.bbox)
                 scores.add(current.score)
-                items.add(current.item + " #" +current.id.toString())
+                items.add("${current.item} #${current.id}")
+
+                current.confidenceSet.add(0.0)
 
                 trackedDetections[current.id] = current
                 predictedDetections[current.id] = calculateKalmanFilter(current)
@@ -54,9 +71,13 @@ class DetectionBuffer() {
 
             if(!matched && current.id == 0) {
                 current.id = generateID()
+                current.confidenceSet.add(1.0)
                 trackedDetections[current.id] = current
                 detectionBuffer[current.id] = currentTime
             }
+
+            current.confidence = current.confidenceSet.average()
+
         }
 
 
@@ -93,6 +114,18 @@ class DetectionBuffer() {
             }
         }
         return 0
+    }
+
+    private fun calculateThreshold(iou: Float, bias: Double) : Double {
+        return (iou + bias) / 2
+    }
+    /**
+     * Uses euclidean distance to get a max displacement (distance) of a box. This is then scaled to the box width + height.
+     */
+    private fun calculateScaledVelocity(velocity: Pair<Int,Int>, rect: Rect): Double {
+        val displacementDistance = sqrt(abs(velocity.first).toDouble().pow(2.0) + abs(velocity.second).toDouble().pow(2.0))
+        val scaleFactor = 2.0
+        return (displacementDistance / (rect.width() + rect.height())) * scaleFactor
     }
 
     private fun calculateIOU(current: Rect, old: Rect): Float {
@@ -134,8 +167,8 @@ class DetectionBuffer() {
             detection.bbox.right - detection.velocity.first,
             detection.bbox.bottom - detection.velocity.second
         )
-        return Detection(box,detection.score,detection.item,detection.velocity)
+        return Detection(box,detection.score,detection.item,detection.velocity,detection.id,detection.confidence,detection.confidenceSet)
     }
 }
 
-data class Detection(val bbox: Rect, val score: Float, var item: String, var velocity: Pair<Int, Int> = Pair(0,0), var id: Int = 0)
+data class Detection(val bbox: Rect, val score: Float, var item: String, var velocity: Pair<Int, Int> = Pair(0,0), var id: Int = 0, var confidence: Double = 1.0, var confidenceSet: MutableSet<Double> = mutableSetOf())
