@@ -68,6 +68,9 @@ class MainActivity : AppCompatActivity() {
                 viewModel.efficientDet.value = false
                 viewModel.mobileNet.value = false
             }
+            view == binding.tracking && option -> {
+                viewModel.tracking.value = true
+            }
         }
 
         if(option) {
