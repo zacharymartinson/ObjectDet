@@ -89,6 +89,8 @@ class DetectionBuffer() {
             val entry = iterator.next()
             if(currentTime - entry.value > 1000L) {
                 iterator.remove()
+                trackedDetections[entry.key]?.confidenceSet?.clear() //Recycle HEAP Memory from MutableSet
+                predictedDetections[entry.key]?.confidenceSet?.clear() //Recycle HEAP Memory from MutableSet
                 predictedDetections.remove(entry.key)
                 trackedDetections.remove(entry.key)
                 ids.remove(entry.key)
