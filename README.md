@@ -1,7 +1,8 @@
 # Real Time Object Detection & Tracking in Android
 
 Implementation of Quantized TFlite models in android for Object Detection and Tracking.
-[Demonstration](https://youtu.be/p8af3-unmQA)
+- [Demonstration](https://youtu.be/p8af3-unmQA)
+- [Release (Expect Bugs)]()
 
 ![Example 1](https://github.com/zacharymartinson/ObjectDet/blob/master/ObjectDetection1.png)
 ![Example 2](https://github.com/zacharymartinson/ObjectDet/blob/master/ObjectDetection2.png)
